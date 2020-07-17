@@ -17,8 +17,7 @@ class UNet(nn.Module):
         self.conv_4 = DoubleConv(256, 512)
         self.conv_5 = DoubleConv(512, 1024)
         self.down = nn.MaxPool2d(2)
-        self.cat_down = Cat()
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.up = UpsampleCat()
         self.conv_6 = DoubleConv(1024, 512)
         self.conv_7 = DoubleConv(512, 256)
         self.conv_8 = DoubleConv(256, 128)
@@ -31,10 +30,10 @@ class UNet(nn.Module):
         x3 = self.conv_3(self.down(x2))
         x4 = self.conv_4(self.down(x3))
         x = self.conv_5(self.down(x4))
-        x = self.conv_6(self.cat_down(self.up(x), x4))
-        x = self.conv_7(self.cat_down(self.up(x), x3))
-        x = self.conv_8(self.cat_down(self.up(x), x2))
-        x = self.conv_9(self.cat_down(self.up(x), x1))
+        x = self.conv_6(self.up(x, x4))
+        x = self.conv_7(self.up(x, x3))
+        x = self.conv_8(self.up(x, x2))
+        x = self.conv_9(self.up(x, x1))
         x = self.out_conv(x)
         return x
 
@@ -58,19 +57,36 @@ class DoubleConv(nn.Module):
         return x
 
 
-class Cat(nn.Module):
+class UpsampleCat(nn.Module):
     """
-    Concat expansive tensor with contracting tensor
-    need crop the contracting tensor (use conv2d)
+    Unsample input and concat with contracting tensor
     """
 
-    def __init__(self):
-        super(Cat, self).__init__()
+    def __init__(self, ch):
+        super(UpsampleCat, self).__init__()
+        # self.up = nn.ConvTranspose2d(ch / 2, ch / 2, 2, stride=2)
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
     def forward(self, up, down):
-        ch = down.size()[1]
-        dw = down.size()[2] - up.size()[2]
-        dh = down.size()[3] - up.size()[3]
-        down = nn.Conv2d(ch, ch, (dw + 1, dh + 1))(down)
+        up = self.up(up)
+
+        up_w, up_h = up.size()[2:4]  # 56
+        down_w, down_h = down.size()[2:4]  # 64
+        down_w, down_h = down_w + 4, down_h + 4  # 68
+
+        dw = down_w - up_w  # 8
+        dh = down_h - up_h  # 8
+
+        up = F.pad(up, (dw // 2, dw - dw // 2, dh // 2, dh - dh // 2))
         y = torch.cat([down, up], dim=1)
         return y
+
+
+def loss_fn(pred_ys, ys):
+    """
+    Calculate loss between predicted ys and truth_ys
+    (CrossEntropy, SoftMax)
+    """
+    pred_ys = torch.reshape(pred_ys, -1)
+    ys = torch.reshape(ys, -1)
+    return nn.CrossEntropyLoss(pred_ys, ys)

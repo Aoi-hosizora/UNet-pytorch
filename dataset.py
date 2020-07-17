@@ -22,10 +22,10 @@ class SSDataset(Dataset):
         self.dataset = []
         for db_line in db_file.split('\n'):
             db_image, db_gt = db_line.split(' ')[:2]
-            db_image, db_gt =  self._path(db_image), self._path(db_gt)
-            print(db_image, db_gt)
+            db_image, db_gt = self._path(db_image), self._path(db_gt)
+            # print(db_image, db_gt)
             db_image = self._read_image(db_image)
-            db_gt = self._read_image(db_gt)
+            db_gt = self._read_gt(db_gt)
             self.dataset.append((db_image, db_gt))
 
         print(('Train' if is_train else 'Test') + 'dataset: image count = {}'.format(self.__len__()))
@@ -46,3 +46,25 @@ class SSDataset(Dataset):
         image = np.array(image)  # w h c
         image = image.transpose((2, 0, 1))  # c w h
         return image / 255  # normalization
+
+    def _read_gt(self, gt):
+        image = Image.open(image_path)
+        image = np.array(image)  # w h c
+        image_w, image_h = image.shape()[1:3]
+
+        classes = {}
+        for w in range(image_w):
+            for h in range(image_h):
+                r, g, b = image[w][h][:3]
+                if (r, g, b) not in classes:
+                    classes[(r, g, b)] = []
+                classes[(r, g, b)].append((w, h))
+
+        gts = np.zeros((len(classes), 3, image_w, image_h))
+        for idx, points in enumerate(classes.values()):
+            gt = gts[idx]
+            for (x, y) in points:
+                for c in range(3):
+                    gt[c][x][y] = 1
+
+        return gts

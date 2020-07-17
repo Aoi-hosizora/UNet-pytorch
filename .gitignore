@@ -4,3 +4,8 @@
 .history/
 .idea/
 __pycache__/
+
+### Dataset ###
+dataset/*.txt
+dataset/gt/
+dataset/images/

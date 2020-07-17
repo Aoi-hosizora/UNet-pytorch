@@ -8,13 +8,18 @@ import torch.optim as optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
-from model import FFDNet
+from model import UNet
+from dataset import SSDataset
+
 
 def load_dataset(dataset_path):
     """
     Load train/test datasets from dataset_path
     """
+    train_dataset = SSDataset(dataset_path=dataset_path, is_train=True)
+    test_dataset = SSDataset(dataset_path=dataset_path, is_train=False)
     pass
+
 
 def train():
     """

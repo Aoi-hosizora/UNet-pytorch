@@ -17,7 +17,10 @@ class UNet(nn.Module):
         self.conv_4 = DoubleConv(256, 512)
         self.conv_5 = DoubleConv(512, 1024)
         self.down = nn.MaxPool2d(2)
-        self.up = UpsampleCat()
+        self.up_1 = UpsampleCat(1024)
+        self.up_2 = UpsampleCat(512)
+        self.up_3 = UpsampleCat(256)
+        self.up_4 = UpsampleCat(128)
         self.conv_6 = DoubleConv(1024, 512)
         self.conv_7 = DoubleConv(512, 256)
         self.conv_8 = DoubleConv(256, 128)
@@ -30,10 +33,13 @@ class UNet(nn.Module):
         x3 = self.conv_3(self.down(x2))
         x4 = self.conv_4(self.down(x3))
         x = self.conv_5(self.down(x4))
-        x = self.conv_6(self.up(x, x4))
-        x = self.conv_7(self.up(x, x3))
-        x = self.conv_8(self.up(x, x2))
-        x = self.conv_9(self.up(x, x1))
+
+        x = self.conv_6(self.up_1(x, x4))
+        x = self.conv_7(self.up_2(x, x3))
+        x = self.conv_8(self.up_3(x, x2))
+        x = self.conv_9(self.up_4(x, x1))
+
+        x = F.pad(x, (2, 2, 2, 2))
         x = self.out_conv(x)
         return x
 
@@ -45,9 +51,9 @@ class DoubleConv(nn.Module):
 
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
-        self.conv_1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
-        self.conv_2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
-        self.relu = nn.Relu()
+        self.conv_1 = nn.Conv2d(in_channels, out_channels, 3)
+        self.conv_2 = nn.Conv2d(out_channels, out_channels, 3)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.conv_1(x)
@@ -64,19 +70,19 @@ class UpsampleCat(nn.Module):
 
     def __init__(self, ch):
         super(UpsampleCat, self).__init__()
-        # self.up = nn.ConvTranspose2d(ch / 2, ch / 2, 2, stride=2)
+        self.up_conv = nn.Conv2d(ch, ch // 2, 3, padding=1)
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
     def forward(self, up, down):
+        up = self.up_conv(up)
         up = self.up(up)
 
         up_w, up_h = up.size()[2:4]  # 56
         down_w, down_h = down.size()[2:4]  # 64
-        down_w, down_h = down_w + 4, down_h + 4  # 68
 
-        dw = down_w - up_w  # 8
-        dh = down_h - up_h  # 8
-
+        dw = down_w + 4 - up_w  # 8
+        dh = down_h + 4 - up_h  # 8
+        down = F.pad(down, (2, 2, 2, 2))
         up = F.pad(up, (dw // 2, dw - dw // 2, dh // 2, dh - dh // 2))
         y = torch.cat([down, up], dim=1)
         return y
@@ -87,6 +93,4 @@ def loss_fn(pred_ys, ys):
     Calculate loss between predicted ys and truth_ys
     (CrossEntropy, SoftMax)
     """
-    pred_ys = torch.reshape(pred_ys, -1)
-    ys = torch.reshape(ys, -1)
-    return nn.CrossEntropyLoss(pred_ys, ys)
+    return nn.CrossEntropyLoss()(pred_ys, ys.argmax(dim=1)) # ch,c,w,h <-> ch,w,h

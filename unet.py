@@ -27,29 +27,29 @@ def train(args):
 
     # model
     net = UNet(in_channels=3, out_channels=5)
-    if args.use_gpu:
+    if args.cuda:
         net = net.cuda()
 
     # setting
     lr = args.lr  # 1e-3
-    momentum = args.momentum  # 0.99
-    optimizer = optim.Adam(net.parameters(), lr=lr, momentum=momentum)
-    loss_fn = loss_fn
+    optimizer = optim.Adam(net.parameters(), lr=lr)
+    criterion = loss_fn
 
     # run
     train_losses = []
     val_losses = []
+    print('Start training...')
     for epoch_idx in range(args.epochs):
         # train
         net.train()
         train_loss = 0
         for batch_idx, batch_data in enumerate(train_dataloader):
             xs, ys = batch_data
-            if args.use_gpu:
+            if args.cuda:
                 xs = xs.cuda()
                 ys = ys.cuda()
             ys_pred = net(xs)
-            loss = loss_fn(ys_pred, ys)
+            loss = criterion(ys_pred, ys)
             train_loss += loss
 
             optimizer.zero_grad()
@@ -61,7 +61,7 @@ def train(args):
         val_loss = 0
         for batch_idx, batch_data in enumerate(val_dataloader):
             xs, ys = batch_data
-            if args.use_gpu:
+            if args.cuda:
                 xs = xs.cuda()
                 ys = ys.cuda()
             ys_pred = net(xs)
@@ -92,7 +92,7 @@ def train(args):
     print('Saved state_dict in {}'.format(args.model_state_dict))
 
 
-def test():
+def test(args):
     """
     Test some data from trained UNet
     """
@@ -103,12 +103,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--do_train', action='store_true', help='Do train')
     parser.add_argument('--do_test', action='store_true', help='Do test')
-    parser.add_argument('--use_gpu', action='store_true', help='Use GPU to train and test')
+    parser.add_argument('--no_gpu', action='store_true', help='Do not use GPU to train and test')
     parser.add_argument('--dataset_path', type=str, default='./dataset/', help='Dataset folder path')
     parser.add_argument('--batch_size', type=int, default=128, help='Train and validate batch size')
     parser.add_argument('--epochs', type=int, default=10, help='Train epoch number')
     parser.add_argument('--lr', type=float, default=1e-3, help='Adam learning rate')
-    parser.add_argument('--momentum', type=float, default=0.99, help='Adam momentum')
     parser.add_argument('--save_epoch', type=int, default=1, help='Save checkpoint every epoch')
     parser.add_argument('--checkpoint_path', type=str, default='./model/', help='Model checkpoint save path')
     parser.add_argument('--model_state_dict', type=str, default='./model/model.pth', help='Model load and sav path')
@@ -117,8 +116,8 @@ def main():
     args = parser.parse_args()
     assert (args.do_train or args.do_test), 'You must do train or test'
 
-    args.cuda = args.use_gpu and torch.cuda.is_available()
-    print('> Parameters: ')
+    args.cuda = not args.no_gpu and torch.cuda.is_available()
+    print('\nParameters: ')
     for k, v in zip(args.__dict__.keys(), args.__dict__.values()):
         print('\t{}: {}'.format(k, v))
     print('\n')
@@ -127,7 +126,7 @@ def main():
         train(args)
 
     if args.do_test:
-        train(args)
+        test(args)
 
 
 if __name__ == '__main__':

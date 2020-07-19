@@ -88,9 +88,12 @@ class UpsampleCat(nn.Module):
         return y
 
 
-def loss_fn(pred_ys, ys):
+def loss_fn(ys_pred, ys):
     """
     Calculate loss between predicted ys and truth_ys
     (CrossEntropy, SoftMax)
     """
-    return nn.CrossEntropyLoss()(pred_ys, ys.argmax(dim=1)) # ch,c,w,h <-> ch,w,h
+    # softmax -> log -> cross entropy
+    ys = ys.argmax(dim=1)
+    # ys_pred = ys_pred.type(torch.FloatTensor)
+    return nn.CrossEntropyLoss()(ys_pred, ys) # ch,c,w,h <-> ch,w,h
